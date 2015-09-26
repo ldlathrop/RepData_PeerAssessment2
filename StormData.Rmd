@@ -1,0 +1,140 @@
+---
+title: "Analysis of weather-related impact (1996 - 2011)"
+author: "L Lathrop"
+date: "September 22, 2015"
+output: html_document
+---
+
+## Synopsis  
+The following report analyzes the U.S. Storm Event data to determine which types of weather-related events have the greatest impact in terms of loss of life, injury, and economic impact. Our analysis shows that from 1996 through November of 2011, excessive heat caused the greatest number of fatalities. During that same period, tornadoes caused the greatest number of injuries. Hurricanes caused the most property damage and hail the most crop damage during the 15-year period.  
+
+## Establish basic settings
+```{r}
+echo = TRUE
+options(scipen = 999)
+library(ggplot2)
+library(plyr)
+library(dplyr)
+library(gridExtra)
+library(RColorBrewer)
+```
+  
+## Data Processing  
+*Read in the data from the Internet and create working file.*
+```{r cache=TRUE}
+download.file("http://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2", destfile = "repdata-data-StormData.csv.bz2", cache = TRUE)
+stormData <- read.csv("repdata-data-StormData.csv.bz2", header = TRUE)
+```
+  
+Included in the `stormData` are 902,297 observations of 37 variables including various measures of storm impact from 1950 through November 2011. We will first explore the data collected for events by the year in which they occurred.
+```{r}
+# Reduce BGN_DATE variable to a single year format
+stormData$BGN_DATE <- strptime(stormData$BGN_DATE, 
+                               format = "%m/%d/%Y %H:%M:%S")
+stormData$year <- format(as.Date(stormData$BGN_DATE), "%Y")
+stormData$year <- as.numeric(stormData$year)
+# Create histogram with events by year
+hist(stormData$year, xlab = "Year", ylab = "Total storm events",
+     main = "Total storm events by year")
+```    
+  
+This histogram reveals that event frequency began to increase significantly around 1996. This is in keeping with the [Storm Event website's](http://ire.org/nicar/database-library/databases/storm-events/) assessment that records prior to this period are incomplete. Therefore, we will subset the data to include only those events occurring after 1996.  
+```{r}
+newStormData <- stormData[stormData$year >= 1996,]
+```
+  
+  
+## U.S. event impact on population health  
+The database contains hundreds of different types of weather events from across the United States. For the sake of brevity, we will assess the data to determine which 10 types of events are most harmful with respect to population health, including direct and indirect fatalities and direct and indirect injuries. 
+```{r}
+# Create a function that can sort and evaluate the variables FATALITIES and INJURIES
+sortHarm <- function(fieldName, top = 10, data = newStormData){
+        index <- which(colnames(data) == fieldName)
+        field <- aggregate(data[, index], 
+                               by = list(data$EVTYPE), FUN = "sum")
+        names(field) <- c("EVTYPE", fieldName)
+        field <- arrange(field, desc(field[,2]))
+        field <- head(field, n = top)
+        field <- within(field, EVTYPE <- factor(x = EVTYPE, 
+                                levels = field$EVTYPE))
+        return(field)
+}
+
+fatalities <- sortHarm("FATALITIES")
+injuries <- sortHarm("INJURIES")
+```  
+  
+# U.S. event economic impact  
+As with the population harm evaluation, this section will assess the data to determine which 10 types of events have the greatest economic impact in terms of property and crop damage.
+```{r}
+# Create a function that can sort and evaluate the variables PROPDMG and CROPDMG
+sortEcon <- function(fieldName, top = 10, data = newStormData){
+        index <- which(colnames(data) == fieldName)
+        field <- aggregate(data[, index], 
+                               by = list(data$EVTYPE), FUN = "sum")
+        names(field) <- c("EVTYPE", fieldName)
+        field <- arrange(field, desc(field[,2]))
+        field <- head(field, n = top)
+        field <- within(field, EVTYPE <- factor(x = EVTYPE, 
+                                levels = field$EVTYPE))
+        return(field)
+}
+
+propertyDamage <- sortEcon("PROPDMG")
+cropDamage <- sortEcon("CROPDMG")
+```  
+  
+## Results  
+This project asks us to determine the most destructive weather event types in terms of loss of life, personal injury, and economic impact. Therefore, the following data analyses are presented:  
+  
+#### Population impact of weather-related events  
+```{r}
+g1 <- ggplot(fatalities, aes(EVTYPE, FATALITIES, fill = EVTYPE))
+g1 <- g1 + geom_histogram(stat = "identity", binwidth = 0.1)
+g1 <- g1 + scale_fill_brewer(palette = "Spectral")
+g1 <- g1 + theme(axis.text.x = element_text(hjust = 1, angle = 45, size = 6))
+g1 <- g1 + theme(legend.position = "none")
+g1 <- g1 + ggtitle("Weather-related fatalities \n (1996 - 2011)") +
+             xlab("Event type") + 
+        ylab("Total fatalities")
+g1 <- g1 + theme(plot.title = element_text(size = 12, 
+                                           face = "bold"))
+
+g2 <- ggplot(injuries, aes(EVTYPE, INJURIES, fill = EVTYPE))
+g2 <- g2 + geom_histogram(stat = "identity", binwidth = 0.1)
+g2 <- g2 + scale_fill_brewer(palette = "Spectral")
+g2 <- g2 + theme(axis.text.x = element_text(hjust = 1, angle = 45, size = 6))
+g2 <- g2 + theme(legend.position = "none")
+g2 <- g2 + ggtitle("Weather-related injuries \n (1996 - 2011)") +
+             xlab("Event type") + 
+        ylab("Total injuries")
+g2 <- g2 + theme(plot.title = element_text(size = 12,
+                                           face = "bold"))
+grid.arrange(g1, g2, ncol = 2)
+``` 
+  
+#### Economic impact of weather-related events  
+```{r}
+g3 <- ggplot(cropDamage, aes(EVTYPE, CROPDMG, fill = EVTYPE))
+g3 <- g3 + geom_histogram(stat = "identity", binwidth = 0.1)
+g3 <- g3 + scale_fill_brewer(palette = "Spectral")
+g3 <- g3 + theme(axis.text.x = element_text(hjust = 1, angle = 45, size = 6))
+g3 <- g3 + theme(legend.position = "none")
+g3 <- g3 + ggtitle("Weather-related \n crop damage \n (1996 - 2011)") +
+             xlab("Event type") + 
+        ylab("Total crop damage")
+g3 <- g3 + theme(plot.title = element_text(size = 12,
+                                           face = "bold"))
+
+g4 <- ggplot(propertyDamage, aes(EVTYPE, PROPDMG, fill = EVTYPE))
+g4 <- g4 + geom_histogram(stat = "identity", binwidth = 0.1)
+g4 <- g4 + scale_fill_brewer(palette = "Spectral")
+g4 <- g4 + theme(axis.text.x = element_text(hjust = 1, angle = 45, size = 6))
+g4 <- g4 + theme(legend.position = "none")
+g4 <- g4 + ggtitle("Weather-related \n property damage \n (1996 - 2011)") +
+             xlab("Event type") + 
+        ylab("Total property damage")
+g4 <- g4 + theme(plot.title = element_text(size = 12,
+                                           face = "bold"))
+grid.arrange(g3, g4, ncol = 2)
+```
